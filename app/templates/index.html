@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Image to Text Converter</title>
+
+  <!-- Tailwind (CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <style>
+    :root{
+      --bg:#ffffff; --ink:#111111; --muted:#6b7280; --border:#e5e7eb;
+      --soft:#f3f4f6; --radius:16px; --shadow:0 6px 24px rgba(0,0,0,.06);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--ink);background:var(--bg);line-height:1.5}
+    .container{max-width:1120px;margin:0 auto;padding:24px}
+    .card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+    .drop{border:2px dashed #d1d5db;border-radius:14px;padding:28px;background:#fff;display:grid;place-items:center;text-align:center;gap:14px;min-height:240px}
+    .drop .icon{width:44px;height:44px;border-radius:12px;background:#f3f4f6;display:grid;place-items:center;margin-bottom:2px;border:1px solid var(--border)}
+    .subtle{color:#9ca3af;font-size:12px}
+    .output{width:100%;min-height:260px;border:1px solid var(--border);border-radius:12px;padding:12px;background:#fff;resize:vertical}
+    .pill{border:1px solid var(--border);background:#fff;padding:6px 10px;border-radius:999px;font-size:13px}
+    .dragging{background-color:rgba(0,0,0,.03)}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="flex items-center gap-3 mb-6">
+      <div class="w-9 h-9 rounded-lg bg-black text-white grid place-items-center font-bold">AI</div>
+      <div>
+        <div class="font-extrabold">AI Image to Text Converter</div>
+        <div class="text-sm text-neutral-500">Extract text from images &amp; PDFs. Fast. Accurate. Private.</div>
+      </div>
+      <a href="#" class="pill ml-auto" style="text-decoration:none;">FAQ</a>
+    </header>
+
+    <!-- Hero text -->
+    <section class="mb-4">
+      <h1 style="font-size:clamp(28px,4vw,44px);line-height:1.1;margin:8px 0 8px;">
+        Convert Images &amp; PDFs to<br/>Editable Text
+      </h1>
+      <p class="text-neutral-600 max-w-prose">
+        Drag &amp; drop your file, we'll extract the text. Supports handwriting, multiple languages, and complex layouts.
+      </p>
+      <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3 max-w-xl mt-4">
+        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Handwriting &amp; print</div>
+        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Multi-language OCR</div>
+        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Tables &amp; columns</div>
+        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Ask questions about content</div>
+      </div>
+    </section>
+
+    <!-- Upload Card (top) -->
+    <div class="card mb-6">
+      <form id="uploadForm"
+            hx-post="/ocr"
+            hx-target="#outputBox"
+            hx-swap="innerHTML"
+            hx-encoding="multipart/form-data"
+            enctype="multipart/form-data"
+            class="grid gap-4">
+
+        <label id="dropArea" class="drop cursor-pointer">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6b7280">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke-width="1.5"/>
+              <path d="M14 2v6h6" stroke-width="1.5"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-weight:800; font-size:18px">Drag &amp; drop your image/PDF</div>
+            <div class="subtle">or</div>
+            <span class="inline-block bg-red-700 text-white hover:bg-black transition px-4 py-2 rounded-full font-semibold">Browse files</span>
+          </div>
+          <p class="subtle">Max 10MB • JPG • JPEG • PNG • WEBP • GIF • BMP • PDF • TIFF</p>
+          <input id="fileInput" name="file" type="file"
+                 accept=".jpg,.jpeg,.png,.webp,.gif,.bmp,.pdf,.tif,.tiff"
+                 class="hidden" />
+        </label>
+      </form>
+    </div>
+
+    <!-- Two columns: Preview (left) & Output (right) -->
+    <div id="resultWrap" class="grid md:grid-cols-2 gap-6">
+      <!-- Left: Preview + Action -->
+      <section class="card">
+        <div id="previewWrap" class="border border-[var(--border)] rounded-xl overflow-hidden hidden"></div>
+        <div id="meta" class="text-xs text-neutral-500 hidden mt-2"></div>
+
+        <!-- Action button muncul setelah ada file -->
+        <div id="actionBtn" class="hidden mt-4">
+          <button type="submit" form="uploadForm"
+                  class="w-full px-6 py-3 rounded-xl font-semibold bg-red-700 text-white hover:bg-black transition">
+            Generate Proposal
+          </button>
+        </div>
+      </section>
+
+      <!-- Right: Output -->
+      <section class="card">
+        <!-- <h2 class="font-semibold mb-3">Generated Proposal</h2> -->
+        <div id="outputBox">
+          <textarea class="output" placeholder="Extracted text & proposal will appear here..." readonly></textarea>
+          <div class="flex gap-3 mt-3">
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="copyOutput()">Copy</button>
+            <button type="button" class="px-4 py-2 rounded-lg border" onclick="downloadTxt()">Download .txt</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const drop = document.getElementById('dropArea');
+    const input = document.getElementById('fileInput');
+    const wrap  = document.getElementById('previewWrap');
+    const meta  = document.getElementById('meta');
+
+    let objectURL = null;
+
+    // Helpers
+    function bytesToSize(b){
+      if(!b && b!==0) return '';
+      const u=['B','KB','MB','GB']; let i=0; while(b>=1024&&i<u.length-1){b/=1024;i++} return b.toFixed(1)+' '+u[i];
+    }
+    function clearPreview(){
+      if(objectURL){ URL.revokeObjectURL(objectURL); objectURL = null; }
+      wrap.innerHTML = '';
+      wrap.classList.add('hidden');
+      meta.classList.add('hidden');
+      document.getElementById('actionBtn').classList.add('hidden');
+    }
+
+    function showPreview(file){
+      clearPreview();
+      objectURL = URL.createObjectURL(file);
+      const type = (file.type||'').toLowerCase();
+
+      wrap.classList.remove('hidden');
+
+      if(type.startsWith('image/')){
+        const img = document.createElement('img');
+        img.src = objectURL;
+        img.alt = file.name;
+        img.style.width = '100%';
+        img.style.maxHeight = '360px';
+        img.style.objectFit = 'contain';
+        img.style.background = '#f3f4f6';
+        wrap.appendChild(img);
+      } else if(type.includes('pdf')) {
+        const emb = document.createElement('embed');
+        emb.src = objectURL + '#page=1&zoom=125';
+        emb.type = 'application/pdf';
+        emb.style.width = '100%';
+        emb.style.height = '360px';
+        wrap.appendChild(emb);
+      } else {
+        const div = document.createElement('div');
+        div.className = 'p-4 text-sm text-neutral-600';
+        div.textContent = 'Preview not available for this file type.';
+        wrap.appendChild(div);
+      }
+
+      meta.textContent = `${file.name} • ${bytesToSize(file.size)}`;
+      meta.classList.remove('hidden');
+
+      // Munculkan tombol action
+      document.getElementById('actionBtn').classList.remove('hidden');
+    }
+
+    // Drag & drop UX
+    drop.addEventListener('dragover', (e)=>{e.preventDefault(); drop.classList.add('dragging');});
+    drop.addEventListener('dragleave', ()=> drop.classList.remove('dragging'));
+    drop.addEventListener('drop', (e)=>{
+      e.preventDefault(); drop.classList.remove('dragging');
+      if(e.dataTransfer.files?.length){
+        const f = e.dataTransfer.files[0];
+        input.files = e.dataTransfer.files;
+        showPreview(f);
+        // Tidak auto-submit; submit saat klik Generate
+      }
+    });
+
+    // Change (from picker)
+    input.addEventListener('change', ()=>{
+      const f = input.files?.[0];
+      if(!f) return;
+      showPreview(f);
+      // Tidak auto-submit; submit saat klik Generate
+    });
+
+    // Copy / Download
+    function copyOutput(){
+      const ta = document.querySelector('#outputBox textarea');
+      if(!ta) return; ta.select(); document.execCommand('copy');
+    }
+    function downloadTxt(){
+      const ta = document.querySelector('#outputBox textarea');
+      if(!ta) return;
+      const blob = new Blob([ta.value], {type:'text/plain;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'output.txt'; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Cleanup ketika pindah halaman
+    window.addEventListener('beforeunload', clearPreview);
+  </script>
+</body>
+</html>
