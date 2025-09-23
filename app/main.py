@@ -9,32 +9,34 @@ import pytesseract, io, os, textwrap
 import fitz  # PyMuPDF
 from dotenv import load_dotenv
 from openai import OpenAI
-
 import re
-
-import pytesseract
 
 load_dotenv()
 
 # ---- Konfigurasi ----
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 OCR_LANG = os.getenv("OCR_LANG", "eng")
-# (Windows) kalau perlu, set path tesseract.exe:
-# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 app = FastAPI(title="Proposal Generator")
 templates = Jinja2Templates(directory="app/templates")
 
-client = OpenAI()  # pakai OPENAI_API_KEY dari ENV
+# -------- Helpers --------
+def get_openai() -> OpenAI:
+    """
+    Lazy init OpenAI client supaya app tidak crash saat start
+    kalau OPENAI_API_KEY belum ada.
+    """
+    key = os.getenv("OPENAI_API_KEY")
+    if not key:
+        # Biarkan /health tetap hidup; endpoint yang butuh AI akan error jelas
+        raise HTTPException(status_code=500, detail="Server missing OPENAI_API_KEY")
+    return OpenAI(api_key=key)
 
-# -------- Utils --------
 def clean_text(s: str, limit: int = 8000) -> str:
     s = s.replace("\x0c", "").strip()
-    # batasi panjang agar prompt ke LLM tidak kebanyakan
     return s[:limit]
 
 def detect_lang_id(text: str) -> str:
-    """Deteksi kasar: 'id' atau 'en'."""
     t = text.lower()
     id_signals = ["kami mencari", "membutuhkan", "lowongan", "anggaran", "durasi", "garansi","contoh","desain","brief","portofolio","upwork"]
     en_signals = ["we are looking", "seeking", "requirements", "deliverables", "budget",
@@ -44,39 +46,23 @@ def detect_lang_id(text: str) -> str:
     return "id" if id_hits >= en_hits else "en"
 
 def looks_like_jobpost(text: str) -> bool:
-    """
-    Heuristik ringan untuk mendeteksi teks job post.
-    Syarat: panjang minimal + adanya ≥2 kata kunci relevan.
-    """
     t = re.sub(r"\s+", " ", text.lower()).strip()
-    if len(t) < 80:  # terlalu pendek untuk job post
+    if len(t) < 80:
         return False
-
-    # Keyword EN + ID
     kw = [
-        # English
-        "we are looking", "we're looking", "seeking", "hire", "hiring",
-        "requirements", "responsibilities", "deliverables", "scope",
-        "timeline", "budget", "hourly", "fixed price", "milestone",
-        "experience", "portfolio", "please include", "proposals",
-        # Indonesian
-        "kami mencari", "kami membutuhkan", "dibutuhkan", "lowongan",
-        "kualifikasi", "tanggung jawab", "deliverable", "ruang lingkup",
-        "jangka waktu", "anggaran", "harian", "per jam", "harga tetap",
-        "pengalaman", "portofolio", "cantumkan", "kirim proposal"
+        "we are looking","we're looking","seeking","hire","hiring","requirements","responsibilities",
+        "deliverables","scope","timeline","budget","hourly","fixed price","milestone","experience",
+        "portfolio","please include","proposals",
+        "kami mencari","kami membutuhkan","dibutuhkan","lowongan","kualifikasi","tanggung jawab",
+        "deliverable","ruang lingkup","jangka waktu","anggaran","harian","per jam","harga tetap",
+        "pengalaman","portofolio","cantumkan","kirim proposal"
     ]
     hits = sum(1 for k in kw if k in t)
-
-    # Sinyal tambahan: ada email/url/angka uang/format pekerjaan
-    extra_signals = 0
-    if re.search(r"\$|usd|idr|rp\s?\d", t):  # ada indikasi budget
-        extra_signals += 1
-    if re.search(r"https?://|\bupwork\b|\bfiverr\b|\bfreelancer\.com\b", t):
-        extra_signals += 1
-    if re.search(r"\b(full[- ]?time|part[- ]?time|contract|freelance)\b", t):
-        extra_signals += 1
-
-    return hits >= 2 or (hits >= 1 and extra_signals >= 1)
+    extra = 0
+    if re.search(r"\$|usd|idr|rp\s?\d", t): extra += 1
+    if re.search(r"https?://|\bupwork\b|\bfiverr\b|\bfreelancer\.com\b", t): extra += 1
+    if re.search(r"\b(full[- ]?time|part[- ]?time|contract|freelance)\b", t): extra += 1
+    return hits >= 2 or (hits >= 1 and extra >= 1)
 
 def ocr_image_bytes(img_bytes: bytes) -> str:
     img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
@@ -88,10 +74,8 @@ def ocr_pdf_bytes(pdf_bytes: bytes, max_pages: int = 8) -> str:
     for i, page in enumerate(doc):
         if i >= max_pages:
             break
-        # 1) coba text extraction asli
         t = page.get_text("text") or ""
         if not t.strip():
-            # 2) fallback: render jadi bitmap lalu OCR
             pix = page.get_pixmap(dpi=200)
             img_b = pix.tobytes("png")
             t = ocr_image_bytes(img_b)
@@ -99,15 +83,6 @@ def ocr_pdf_bytes(pdf_bytes: bytes, max_pages: int = 8) -> str:
     return "\n".join(texts)
 
 def build_prompt(job_text: str) -> list:
-    """
-    Aturan:
-    1) 1 paragraf singkat.
-    2) Tidak pakai salam/intro nama.
-    3) Jika ADA brief/contoh desain/brand info di job_text -> buat 'free sample' singkat (deskripsikan konsep, bukan link/file).
-    4) Jika TIDAK ADA brief -> minta brief dulu (ringkas).
-    5) Bahasa mengikuti bahasa job_text (ID/EN).
-    6) Nada profesional, to the point. Tanpa placeholder/link.
-    """
     sys = (
         "You are a proposal writer for freelance graphic design jobs. "
         "Write in the same language as the job text (Indonesian or English). "
@@ -117,14 +92,12 @@ def build_prompt(job_text: str) -> list:
         "Do NOT use links or placeholders. Be specific and actionable."
     )
     user = f"Job post text:\n{job_text}\n\nWrite the proposal now."
-    return [
-        {"role": "system", "content": sys},
-        {"role": "user", "content": user}
-    ]
+    return [{"role": "system", "content": sys}, {"role": "user", "content": user}]
 
 def generate_proposal(job_text: str) -> str:
     msgs = build_prompt(job_text)
     try:
+        client = get_openai()  # <- di-init di sini, bukan global
         resp = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=msgs,
@@ -132,13 +105,17 @@ def generate_proposal(job_text: str) -> str:
             max_tokens=220,
         )
         out = resp.choices[0].message.content.strip()
-        # jaga-jaga, enforce 1 paragraf
-        out = " ".join(out.splitlines()).strip()
-        return out
+        return " ".join(out.splitlines()).strip()
+    except HTTPException:
+        raise
     except Exception as e:
         return f"(LLM error) {e}"
 
 # -------- Routes --------
+@app.get("/health")
+def health():
+    return {"ok": True}
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -147,11 +124,9 @@ def home(request: Request):
 async def ocr(request: Request, file: UploadFile = File(...)):
     data = await file.read()
     ctype = (file.content_type or "").lower()
-
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # OCR
     if ctype.startswith("image/"):
         extracted = ocr_image_bytes(data)
     elif ctype in ("application/pdf", "pdf", "application/octet-stream"):
@@ -161,23 +136,18 @@ async def ocr(request: Request, file: UploadFile = File(...)):
 
     extracted = clean_text(extracted)
 
-    # === NEW: validasi apakah ini job post ===
     if not looks_like_jobpost(extracted):
         lang = detect_lang_id(extracted)
-        if lang == "id":
-            proposal = "Maaf, aku tidak bisa mendeteksi job post dari gambar/file ini."
-        else:
-            proposal = "Sorry, I couldn’t detect a job post from this image/file."
+        proposal = ("Maaf, aku tidak bisa mendeteksi job post dari gambar/file ini."
+                    if lang == "id" else
+                    "Sorry, I couldn’t detect a job post from this image/file.")
         return templates.TemplateResponse(
             "result.html",
             {"request": request, "extracted": extracted, "proposal": proposal}
         )
 
-    # Jika valid job post → generate proposal normal
     proposal = generate_proposal(extracted) if extracted else "(No text detected.)"
-
     return templates.TemplateResponse(
         "result.html",
         {"request": request, "extracted": extracted, "proposal": proposal}
     )
-
