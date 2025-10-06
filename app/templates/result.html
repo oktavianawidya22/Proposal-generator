@@ -1,13 +1,22 @@
 <!-- app/templates/result.html -->
-<div class="grid gap-3">
-  <!-- <label class="font-semibold">Extracted Text</label>
-  <textarea class="w-full min-h-[160px] border border-neutral-200 rounded-lg p-3" readonly>{{ extracted }}</textarea> -->
+<div class="grid gap-4 mt-4">
 
-  <label class="font-semibold mt-2">Generated Proposal</label>
-  <textarea id="proposalBox" class="w-full min-h-[160px] border border-neutral-200 rounded-lg p-3" readonly>{{ proposal }}</textarea>
-
-  <div class="flex gap-2">
-    <button type="button" class="border border-neutral-200 rounded-md px-3 py-2" onclick="(function(){const ta=document.getElementById('proposalBox'); if(!ta)return; ta.select(); document.execCommand('copy');})()">Copy</button>
-    <button type="button" class="border border-neutral-200 rounded-md px-3 py-2" onclick="(function(){const ta=document.getElementById('proposalBox'); if(!ta)return; const blob=new Blob([ta.value],{type:'text/plain;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='proposal.txt'; a.click(); URL.revokeObjectURL(url);})()">Download .txt</button>
+  <!-- Penjelasan Job Post -->
+  <div class="border border-neutral-200 rounded-lg p-4 bg-white shadow-sm">
+    <label class="font-semibold text-lg mb-2 block">Penjelasan Job Post</label>
+    <p class="whitespace-pre-line text-sm text-neutral-700">{{ explanation }}</p>
   </div>
+
+  <!-- Proposal -->
+  <div class="border border-neutral-200 rounded-lg p-4 bg-white shadow-sm">
+    <label class="font-semibold text-lg mb-2 block">Proposal (English)</label>
+    <p class="whitespace-pre-line text-sm text-neutral-700">{{ proposal }}</p>
+  </div>
+
+  <!-- Terjemahan Proposal -->
+  <div class="border border-neutral-200 rounded-lg p-4 bg-white shadow-sm">
+    <label class="font-semibold text-lg mb-2 block">Terjemahan Proposal</label>
+    <p class="whitespace-pre-line text-sm text-neutral-700">{{ translation }}</p>
+  </div>
+
 </div>

@@ -12,8 +12,6 @@ from openai import OpenAI
 
 import re
 
-import pytesseract
-
 load_dotenv()
 
 # ---- Konfigurasi ----
@@ -100,43 +98,132 @@ def ocr_pdf_bytes(pdf_bytes: bytes, max_pages: int = 8) -> str:
 
 def build_prompt(job_text: str) -> list:
     """
-    Aturan:
-    1) 1 paragraf singkat.
-    2) Tidak pakai salam/intro nama.
-    3) Jika ADA brief/contoh desain/brand info di job_text -> buat 'free sample' singkat (deskripsikan konsep, bukan link/file).
-    4) Jika TIDAK ADA brief -> minta brief dulu (ringkas).
-    5) Bahasa mengikuti bahasa job_text (ID/EN).
-    6) Nada profesional, to the point. Tanpa placeholder/link.
+    Prompt baru: 3 langkah (Penjelasan ID, Proposal EN <=110 words, Terjemahan ID),
+    dengan format output yang HARUS persis:
+    - Penjelasan Job Post:
+    - Proposal:
+    - Terjemahan Proposal:
     """
-    sys = (
-        "You are a proposal writer for freelance graphic design jobs. "
-        "Write in the same language as the job text (Indonesian or English). "
-        "One concise paragraph only. No greetings, no personal name, no fluff. "
-        "If the job text contains a design brief or brand details, include a short 'free sample' concept (describe what you'd deliver). "
-        "If it doesn't contain a brief, ask for the minimal brief you need (very concise). "
-        "Do NOT use links or placeholders. Be specific and actionable."
+    system_msg = (
+        "You are a precise assistant that reads Upwork job posts and returns exactly three sections. "
+        "Follow the rules strictly, keep things concise and professional, and NEVER add extra headings or commentary."
     )
-    user = f"Job post text:\n{job_text}\n\nWrite the proposal now."
+
+    user_msg = f"""
+Your task is to perform three steps based on the Upwork job post I provide. Follow these rules carefully:
+
+---
+🔹 STEP 1: Jelaskan isi job post (dalam Bahasa Indonesia)
+Gunakan bahasa Indonesia yang jelas, padat, dan mudah dimengerti.
+
+---
+🔹 STEP 2: Write the proposal (in English)
+Write a proposal in English based on the job post. Follow these instructions:
+1. Make the proposal concise and professional — min 2 short paragraphs, under 150 words.
+2. Always start with: Hi,
+3. Then create a natural, non-repetitive opening sentence based on brand visibility:
+   - If the brand is NOT mentioned: write a sentence that expresses your willingness to create a free sample if the client can provide more details or share their brand — but avoid repeating the same sentence every time.
+   - If the brand IS mentioned: write a sentence that says you’ve already created a design sample based on their brand — but phrase it differently each time.
+4. After the opening, briefly mention relevant skills, offer, or how you collaborate.
+5. End with: Best regards
+
+---
+🔹 STEP 3: Terjemahkan proposal ke dalam Bahasa Indonesia
+Terjemahkan isi proposal dari Step 2 ke dalam Bahasa Indonesia. Gunakan bahasa yang tetap sopan, profesional, dan mudah dipahami klien lokal.
+
+---
+Format your output exactly like this (no extra text, no markdown, no emojis):
+
+Penjelasan Job Post: [isi Step 1 - Bahasa Indonesia]
+Proposal: [isi Step 2 - English]
+Terjemahan Proposal: [isi Step 3 - Bahasa Indonesia]
+
+---
+Here is the job post:
+{job_text}
+""".strip()
+
     return [
-        {"role": "system", "content": sys},
-        {"role": "user", "content": user}
+        {"role": "system", "content": system_msg},
+        {"role": "user", "content": user_msg}
     ]
 
-def generate_proposal(job_text: str) -> str:
+def parse_llm_output(raw: str) -> dict:
+    """
+    Parse LLM output into three parts. Return dict with keys:
+    'explanation', 'proposal', 'translation'.
+    Fallback: if parsing fails, put whole output into 'proposal' and leave others empty.
+    """
+    # normalize whitespace but keep line breaks for paragraphs
+    text = raw.strip()
+
+    # Try robust regex: capture after each heading up to next heading or end
+    patterns = {
+        'explanation': r"Penjelasan\s*Job\s*Post\s*:\s*(.*?)\s*(?=Proposal\s*:|Terjemahan\s*Proposal\s*:|$)",
+        'proposal': r"Proposal\s*:\s*(.*?)\s*(?=Terjemahan\s*Proposal\s*:|Penjelasan\s*Job\s*Post\s*:|$)",
+        'translation': r"Terjemahan\s*Proposal\s*:\s*(.*)$"
+    }
+
+    result = {'explanation': '', 'proposal': '', 'translation': ''}
+
+    for k, pat in patterns.items():
+        m = re.search(pat, text, flags=re.IGNORECASE | re.DOTALL)
+        if m:
+            # strip and collapse multiple blank lines
+            extracted = re.sub(r'\n{3,}', '\n\n', m.group(1).strip())
+            result[k] = extracted
+
+    # If nothing parsed, attempt simple split by lines with headings (defensive)
+    if not any(result.values()):
+        # attempt line-by-line splitting by headings
+        parts = re.split(r"(Penjelasan\s*Job\s*Post\s*:|Proposal\s*:|Terjemahan\s*Proposal\s*:)", text, flags=re.IGNORECASE)
+        # parts contains separators; reconstruct simple parse
+        try:
+            # naive mapping: find indexes of headings and following content
+            joined = "".join(parts).strip()
+            # fallback: put everything into 'proposal'
+            result['proposal'] = text
+        except Exception:
+            result['proposal'] = text
+
+    # final cleanup: ensure strings are not ridiculously long (safety)
+    for k in result:
+        if len(result[k]) > 20000:
+            result[k] = result[k][:20000] + "\n\n...(truncated)"
+
+    return result
+
+def generate_proposal(job_text: str) -> dict:
+    """
+    Returns dict with keys: explanation, proposal, translation.
+    If error occurs, returns those keys with an error message in 'proposal'.
+    """
     msgs = build_prompt(job_text)
     try:
         resp = client.chat.completions.create(
             model=OPENAI_MODEL,
             messages=msgs,
-            temperature=0.4,
-            max_tokens=220,
+            temperature=0.5,
+            max_tokens=600,
         )
         out = resp.choices[0].message.content.strip()
-        # jaga-jaga, enforce 1 paragraf
-        out = " ".join(out.splitlines()).strip()
-        return out
+        # Keep original line breaks for better parsing
+        parsed = parse_llm_output(out)
+        # If proposal empty but the whole output is non-empty, put fallback
+        if not parsed['proposal'] and out:
+            # try to salvage by assuming second line/paragraph is proposal
+            paragraphs = [p.strip() for p in re.split(r'\n{2,}', out) if p.strip()]
+            if len(paragraphs) >= 2:
+                parsed['explanation'] = parsed['explanation'] or paragraphs[0]
+                parsed['proposal'] = paragraphs[1]
+                parsed['translation'] = parsed['translation'] or (paragraphs[2] if len(paragraphs) > 2 else "")
+            else:
+                parsed['proposal'] = out  # put entire text to proposal as last resort
+
+        return parsed
     except Exception as e:
-        return f"(LLM error) {e}"
+        err_msg = f"(LLM error) {e}"
+        return {'explanation': '', 'proposal': err_msg, 'translation': ''}
 
 # -------- Routes --------
 @app.get("/", response_class=HTMLResponse)
@@ -165,19 +252,34 @@ async def ocr(request: Request, file: UploadFile = File(...)):
     if not looks_like_jobpost(extracted):
         lang = detect_lang_id(extracted)
         if lang == "id":
-            proposal = "Maaf, aku tidak bisa mendeteksi job post dari gambar/file ini."
+            explanation = "Maaf, aku tidak bisa mendeteksi job post dari gambar/file ini."
+            proposal = ""
+            translation = ""
         else:
-            proposal = "Sorry, I couldn’t detect a job post from this image/file."
+            explanation = "Sorry, I couldn’t detect a job post from this image/file."
+            proposal = ""
+            translation = ""
         return templates.TemplateResponse(
             "result.html",
-            {"request": request, "extracted": extracted, "proposal": proposal}
+            {
+                "request": request,
+                "extracted": extracted,
+                "explanation": explanation,
+                "proposal": proposal,
+                "translation": translation
+            }
         )
 
-    # Jika valid job post → generate proposal normal
-    proposal = generate_proposal(extracted) if extracted else "(No text detected.)"
+    # Jika valid job post → generate proposal normal (mengembalikan dict)
+    parsed = generate_proposal(extracted) if extracted else {'explanation': '', 'proposal': '(No text detected.)', 'translation': ''}
 
     return templates.TemplateResponse(
         "result.html",
-        {"request": request, "extracted": extracted, "proposal": proposal}
+        {
+            "request": request,
+            "extracted": extracted,
+            "explanation": parsed.get('explanation', ''),
+            "proposal": parsed.get('proposal', ''),
+            "translation": parsed.get('translation', '')
+        }
     )
-

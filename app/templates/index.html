@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Image to Text Converter</title>
+  <title>Proposal Generator</title>
 
   <!-- Tailwind (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- HTMX -->
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
 
   <style>
     :root{
@@ -34,29 +34,29 @@
     <header class="flex items-center gap-3 mb-6">
       <div class="w-9 h-9 rounded-lg bg-black text-white grid place-items-center font-bold">AI</div>
       <div>
-        <div class="font-extrabold">AI Image to Text Converter</div>
-        <div class="text-sm text-neutral-500">Extract text from images &amp; PDFs. Fast. Accurate. Private.</div>
+        <div class="font-extrabold">Proposal Generator by Nanda Elang</div>
+        <div class="text-sm text-neutral-500">Bikin Proposal dari Screenshot Job Post</div>
       </div>
       <a href="#" class="pill ml-auto" style="text-decoration:none;">FAQ</a>
     </header>
 
-    <!-- Hero text -->
-    <section class="mb-4">
+    <!-- Hero -->
+    <section class="mb-4 text-center flex flex-col items-center justify-center">
       <h1 style="font-size:clamp(28px,4vw,44px);line-height:1.1;margin:8px 0 8px;">
-        Convert Images &amp; PDFs to<br/>Editable Text
+        Upload screenshot Job Upwork → Jadi Proposal Siap Kirim
       </h1>
       <p class="text-neutral-600 max-w-prose">
-        Drag &amp; drop your file, we'll extract the text. Supports handwriting, multiple languages, and complex layouts.
+        Upload job post yang kamu temukan. Sistem ini bantuin kamu bikin proposal yang jelas, meyakinkan, dan siap dikirim ke klien.
       </p>
       <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3 max-w-xl mt-4">
-        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Handwriting &amp; print</div>
-        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Multi-language OCR</div>
-        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Tables &amp; columns</div>
-        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Ask questions about content</div>
+        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Tulisan gaya top freelancer </div>
+        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Cepat: kurang dari 1 menit</div>
+        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> File SS nggak disimpan</div>
+        <div class="flex items-center gap-2 text-sm"><span class="w-4 h-4 rounded-full border border-green-600 grid place-items-center"><svg class="w-3 h-3 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5" stroke-width="2" stroke-linecap="round"/></svg></span> Semuanya aman & private</div>
       </div>
     </section>
 
-    <!-- Upload Card (top) -->
+    <!-- Upload -->
     <div class="card mb-6">
       <form id="uploadForm"
             hx-post="/ocr"
@@ -86,25 +86,31 @@
       </form>
     </div>
 
-    <!-- Two columns: Preview (left) & Output (right) -->
+    <!-- Two columns -->
     <div id="resultWrap" class="grid md:grid-cols-2 gap-6">
-      <!-- Left: Preview + Action -->
+      <!-- Left -->
       <section class="card">
         <div id="previewWrap" class="border border-[var(--border)] rounded-xl overflow-hidden hidden"></div>
         <div id="meta" class="text-xs text-neutral-500 hidden mt-2"></div>
 
-        <!-- Action button muncul setelah ada file -->
+        <!-- Action -->
         <div id="actionBtn" class="hidden mt-4">
-          <button type="submit" form="uploadForm"
-                  class="w-full px-6 py-3 rounded-xl font-semibold bg-red-700 text-white hover:bg-black transition">
-            Generate Proposal
+          <button id="generateBtn"
+                  type="submit"
+                  form="uploadForm"
+                  class="w-full px-6 py-3 rounded-xl font-semibold bg-red-700 text-white hover:bg-black transition flex items-center justify-center gap-2">
+            <!-- Spinner -->
+            <svg id="btnSpinner" class="hidden animate-spin h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+              <path class="opacity-75" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" fill="currentColor"></path>
+            </svg>
+            <span id="btnLabel">Generate Proposal</span>
           </button>
         </div>
       </section>
 
-      <!-- Right: Output -->
+      <!-- Right -->
       <section class="card">
-        <!-- <h2 class="font-semibold mb-3">Generated Proposal</h2> -->
         <div id="outputBox">
           <textarea class="output" placeholder="Extracted text & proposal will appear here..." readonly></textarea>
           <div class="flex gap-3 mt-3">
@@ -124,7 +130,6 @@
 
     let objectURL = null;
 
-    // Helpers
     function bytesToSize(b){
       if(!b && b!==0) return '';
       const u=['B','KB','MB','GB']; let i=0; while(b>=1024&&i<u.length-1){b/=1024;i++} return b.toFixed(1)+' '+u[i];
@@ -170,11 +175,9 @@
       meta.textContent = `${file.name} • ${bytesToSize(file.size)}`;
       meta.classList.remove('hidden');
 
-      // Munculkan tombol action
       document.getElementById('actionBtn').classList.remove('hidden');
     }
 
-    // Drag & drop UX
     drop.addEventListener('dragover', (e)=>{e.preventDefault(); drop.classList.add('dragging');});
     drop.addEventListener('dragleave', ()=> drop.classList.remove('dragging'));
     drop.addEventListener('drop', (e)=>{
@@ -183,19 +186,15 @@
         const f = e.dataTransfer.files[0];
         input.files = e.dataTransfer.files;
         showPreview(f);
-        // Tidak auto-submit; submit saat klik Generate
       }
     });
 
-    // Change (from picker)
     input.addEventListener('change', ()=>{
       const f = input.files?.[0];
       if(!f) return;
       showPreview(f);
-      // Tidak auto-submit; submit saat klik Generate
     });
 
-    // Copy / Download
     function copyOutput(){
       const ta = document.querySelector('#outputBox textarea');
       if(!ta) return; ta.select(); document.execCommand('copy');
@@ -209,8 +208,47 @@
       URL.revokeObjectURL(url);
     }
 
-    // Cleanup ketika pindah halaman
     window.addEventListener('beforeunload', clearPreview);
+
+    // === Loading State di tombol Generate Proposal ===
+    (function(){
+      const btn        = document.getElementById("generateBtn");
+      const btnLabel   = document.getElementById("btnLabel");
+      const btnSpinner = document.getElementById("btnSpinner");
+
+      // Mulai request
+      document.body.addEventListener("htmx:beforeRequest", function(evt) {
+        if (evt.detail.elt?.id === "uploadForm") {
+          btn.disabled = true;
+          btn.classList.add("opacity-80","cursor-not-allowed");
+          btnSpinner.classList.remove("hidden");
+          btnLabel.textContent = "Processing...";
+          const ta = document.querySelector('#outputBox textarea');
+          if (ta) ta.value = "Processing your file. Please wait...";
+        }
+      });
+
+      // Selesai request (berhasil)
+      document.body.addEventListener("htmx:afterRequest", function(evt) {
+        if (evt.detail.elt?.id === "uploadForm") {
+          btn.disabled = false;
+          btn.classList.remove("opacity-80","cursor-not-allowed");
+          btnSpinner.classList.add("hidden");
+          btnLabel.textContent = "Generate Proposal";
+        }
+      });
+
+      // Fail-safe: jika error kirim/response
+      document.body.addEventListener("htmx:sendError", resetBtn);
+      document.body.addEventListener("htmx:responseError", resetBtn);
+
+      function resetBtn(){
+        btn.disabled = false;
+        btn.classList.remove("opacity-80","cursor-not-allowed");
+        btnSpinner.classList.add("hidden");
+        btnLabel.textContent = "Generate Proposal";
+      }
+    })();
   </script>
 </body>
 </html>
